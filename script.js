@@ -3,6 +3,7 @@ let notesSections = loadData('notesData') || {};
 let diarySections = loadData('diaryData') || {};
 let currentTab = 'notes';
 let editingIndex = null;
+let popupActive = null; // Track active pop-up entry
 
 // Initial render
 displayNavbar();
@@ -52,10 +53,11 @@ document.querySelectorAll('.nav-option').forEach(option => {
     });
 });
 
-// Event delegation
+// Event delegation (updated for minimize button)
 document.addEventListener('click', (e) => {
     const sectionDiv = e.target.closest('.section');
     const navSection = e.target.closest('.nav-section');
+    const entryDiv = e.target.closest('.note, .diary-entry');
     const titleInput = sectionDiv?.querySelector('.note-title');
     const contentInput = sectionDiv?.querySelector('.note-content');
     const dateInput = sectionDiv?.querySelector('.note-date');
@@ -108,8 +110,67 @@ document.addEventListener('click', (e) => {
     } else if (e.target.classList.contains('nav-section')) {
         const sectionName = e.target.dataset.section;
         scrollToSection(sectionName);
+    } else if (entryDiv && !e.target.classList.contains('edit-btn') && !e.target.classList.contains('delete-btn')) {
+        // Open editable pop-up when clicking note/diary entry (except edit/delete buttons)
+        const sectionName = entryDiv.closest('.section').querySelector('h2').textContent;
+        const index = entryDiv.querySelector('button').dataset.index;
+        const item = (currentTab === 'notes' ? notesSections : diarySections)[sectionName][index];
+        openEditablePopup(item, sectionName, index);
+    } else if (e.target.classList.contains('minimize-btn')) { // Updated from close-btn to minimize-btn
+        // Close pop-up (discard changes if not updated)
+        closePopup();
+    } else if (e.target.classList.contains('cancel-btn')) {
+        // Cancel editing in pop-up
+        closePopup();
+    } else if (e.target.classList.contains('update-btn')) {
+        // Update content in pop-up
+        const sectionName = e.target.dataset.section;
+        const index = e.target.dataset.index;
+        const title = e.target.closest('.popup-content').querySelector('.content input[type="text"]').value.trim() || (currentTab === 'notes' ? 'Note title' : 'Dear Diary...');
+        const content = e.target.closest('.popup-content').querySelector('.content textarea').value.trim();
+        const date = currentTab === 'diary' ? e.target.closest('.popup-content').querySelector('.content input[type="date"]').value : '';
+        if (content) {
+            const sections = currentTab === 'notes' ? notesSections : diarySections;
+            sections[sectionName][index] = { title, content, date };
+            saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
+            closePopup();
+            displaySections();
+        }
     }
 });
+
+// Pop-up functions (no changes needed here, already correct)
+function openEditablePopup(item, sectionName, index) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    overlay.innerHTML = `
+        <div class="popup-content ${currentTab === 'diary' ? 'diary-popup' : ''}" data-section="${sectionName}" data-index="${index}">
+            <div class="header">
+                <span>${item.title || (currentTab === 'notes' ? 'Note' : 'Dear diary...')}</span>
+                ${currentTab === 'diary' ? `<input type="date" value="${item.date || ''}">` : ''}
+                <button class="minimize-btn">-</button> <!-- Updated from close-btn to minimize-btn -->
+                <button class="cancel-btn">❌</button>
+            </div>
+            <div class="content">
+                <input type="text" value="${item.title || (currentTab === 'notes' ? 'Note title' : 'Dear Diary...')}">
+                ${currentTab === 'diary' ? `<input type="date" value="${item.date || ''}">` : ''}
+                <textarea>${item.content}</textarea>
+                <button class="update-btn" data-section="${sectionName}" data-index="${index}">Update</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('active'), 10); // Add delay for smooth transition
+    popupActive = overlay;
+}
+
+function closePopup() {
+    if (popupActive) {
+        popupActive.classList.remove('active');
+        setTimeout(() => popupActive.remove(), 300); // Match transition duration
+        popupActive = null;
+    }
+}
 
 // Main content search
 document.getElementById('search').addEventListener('input', (e) => {
