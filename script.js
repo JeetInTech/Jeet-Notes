@@ -2,6 +2,7 @@
 let notesSections = loadData('notesData') || {};
 let diarySections = loadData('diaryData') || {};
 let currentTab = 'notes';
+let editingIndex = null;
 
 // Initial render
 displayNavbar();
@@ -47,31 +48,48 @@ document.querySelectorAll('.nav-option').forEach(option => {
         currentTab = option.getAttribute('data-tab');
         displayNavbar();
         displaySections();
+        filterSections(document.getElementById('section-search').value.trim(), currentTab);
     });
 });
 
 // Event delegation
 document.addEventListener('click', (e) => {
+    const sectionDiv = e.target.closest('.section');
+    const navSection = e.target.closest('.nav-section');
+    const titleInput = sectionDiv?.querySelector('.note-title');
+    const contentInput = sectionDiv?.querySelector('.note-content');
+    const dateInput = sectionDiv?.querySelector('.note-date');
+
     if (e.target.classList.contains('add-note-btn')) {
-        const sectionDiv = e.target.closest('.section');
         const sectionName = sectionDiv.querySelector('h2').textContent;
-        const titleInput = sectionDiv.querySelector('.note-title');
-        const contentInput = sectionDiv.querySelector('.note-content');
-        const dateInput = sectionDiv.querySelector('input[type="date"]');
-        const title = titleInput.value.trim();
+        const title = titleInput.value.trim() || (currentTab === 'notes' ? 'Note title' : 'Dear Diary...');
         const content = contentInput.value.trim();
         const date = dateInput ? dateInput.value : '';
-        if (title && content) {
+        if (content) {
             const sections = currentTab === 'notes' ? notesSections : diarySections;
-            sections[sectionName].push({ title, content, date });
+            if (editingIndex !== null) {
+                sections[sectionName][editingIndex] = { title, content, date };
+                editingIndex = null;
+            } else {
+                sections[sectionName].push({ title, content, date });
+            }
             saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
             titleInput.value = '';
             contentInput.value = '';
             if (dateInput) dateInput.value = '';
+            sectionDiv.classList.remove('editing');
             displaySections();
         }
+    } else if (e.target.classList.contains('edit-btn')) {
+        const sectionName = sectionDiv.querySelector('h2').textContent;
+        const index = e.target.dataset.index;
+        const item = (currentTab === 'notes' ? notesSections : diarySections)[sectionName][index];
+        titleInput.value = item.title || (currentTab === 'notes' ? 'Note title' : 'Dear Diary...');
+        contentInput.value = item.content;
+        if (dateInput) dateInput.value = item.date || '';
+        editingIndex = index;
+        sectionDiv.classList.add('editing');
     } else if (e.target.classList.contains('delete-btn')) {
-        const sectionDiv = e.target.closest('.section');
         const sectionName = sectionDiv.querySelector('h2').textContent;
         const index = e.target.dataset.index;
         const sections = currentTab === 'notes' ? notesSections : diarySections;
@@ -79,12 +97,14 @@ document.addEventListener('click', (e) => {
         saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
         displaySections();
     } else if (e.target.classList.contains('delete-section-btn')) {
-        const sectionName = e.target.closest('.nav-section').dataset.section;
+        const sectionName = navSection.dataset.section;
         const sections = currentTab === 'notes' ? notesSections : diarySections;
-        delete sections[sectionName];
-        saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
-        displayNavbar();
-        displaySections();
+        if (sectionName in sections) {
+            delete sections[sectionName];
+            saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
+            displayNavbar();
+            displaySections();
+        }
     } else if (e.target.classList.contains('nav-section')) {
         const sectionName = e.target.dataset.section;
         scrollToSection(sectionName);
@@ -136,6 +156,7 @@ function displaySections() {
     const container = document.getElementById('sections');
     container.innerHTML = '';
     const sectionsData = currentTab === 'notes' ? notesSections : diarySections;
+    container.className = `container ${currentTab}-section`;
     for (const sectionName in sectionsData) {
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'section';
@@ -147,9 +168,9 @@ function displaySections() {
                         <span>Dear diary...</span>
                         <input type="date" value="${item.date || ''}" disabled>
                     </div>
-                ` : ''}
-                <h3>${item.title}</h3>
+                ` : `<h3>${item.title || 'Untitled Note'}</h3>`}
                 <p>${item.content}</p>
+                <button class="edit-btn" data-index="${index}">✏️</button>
                 <button class="delete-btn" data-index="${index}">X</button>
             </div>
         `).join('');
@@ -157,7 +178,7 @@ function displaySections() {
             <h2>${sectionName}</h2>
             <div class="notes">${itemsHtml}</div>
             <div class="add-note">
-                <input type="text" class="note-title" placeholder="${currentTab === 'notes' ? 'Note title' : 'Dear Diary...'}">
+                <input type="text" class="note-title" placeholder="${currentTab === 'notes' ? 'Note title' : 'Dear Diary...'}" ${currentTab === 'diary' ? 'readonly' : ''}>
                 ${currentTab === 'diary' ? '<input type="date" class="note-date">' : ''}
                 <textarea class="note-content" placeholder="${currentTab === 'notes' ? 'Write your note here...' : 'Write your entry here...'}"></textarea>
                 <button class="add-note-btn">Add ${currentTab === 'notes' ? 'Note' : 'Entry'}</button>
@@ -175,7 +196,7 @@ function scrollToSection(sectionName) {
 function filterContent(searchTerm, tab) {
     const items = document.querySelectorAll(`.${tab === 'notes' ? 'note' : 'diary-entry'}`);
     items.forEach(item => {
-        const title = item.querySelector('h3').textContent.toLowerCase();
+        const title = item.querySelector(currentTab === 'notes' ? 'h3' : '.header span')?.textContent.toLowerCase() || '';
         const content = item.querySelector('p').textContent.toLowerCase();
         item.classList.toggle('hidden', !(title.includes(searchTerm) || content.includes(searchTerm)));
     });

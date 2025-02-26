@@ -236,7 +236,7 @@ body.sidebar-open .container {
 .notes {
     padding: 15px;
 }
-.note {
+.note, .diary-entry {
     background: #fff;
     padding: 15px;
     margin-bottom: 10px;
@@ -245,7 +245,7 @@ body.sidebar-open .container {
     position: relative;
     transition: transform 0.3s, opacity 0.3s;
 }
-.note:hover {
+.note:hover, .diary-entry:hover {
     transform: scale(1.02);
 }
 .note h3 {
@@ -253,21 +253,22 @@ body.sidebar-open .container {
     font-size: 16px;
     margin-bottom: 5px;
 }
-.note p {
+.note p, .diary-entry p {
     color: #666;
     font-size: 14px;
+    white-space: pre-wrap; /* Preserves line breaks and wraps text */
 }
-.note.hidden {
+.note.hidden, .diary-entry.hidden {
     opacity: 0;
     height: 0;
     margin: 0;
     padding: 0;
     overflow: hidden;
 }
-.delete-btn {
+.delete-btn, .edit-btn {
     position: absolute;
     top: 10px;
-    right: 10px;
+    right: 35px;
     background: #e60023;
     color: #fff;
     border: none;
@@ -282,10 +283,13 @@ body.sidebar-open .container {
     opacity: 0;
     transition: opacity 0.2s;
 }
-.note:hover .delete-btn {
+.edit-btn {
+    right: 10px; /* Position edit button to the left of delete */
+}
+.note:hover .delete-btn, .note:hover .edit-btn, .diary-entry:hover .delete-btn, .diary-entry:hover .edit-btn {
     opacity: 1;
 }
-.delete-btn:hover {
+.delete-btn:hover, .edit-btn:hover {
     background: #b3001b;
 }
 
@@ -320,36 +324,57 @@ body.sidebar-open .container {
     background: #b3001b;
 }
 
-/* Diary-Specific Styling */
+/* Diary-Specific Styling (Square Page Design) */
 .diary-entry {
     background: #fff;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    width: 300px; /* Square-like width */
+    height: 400px; /* Square-like height */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     position: relative;
+    overflow-y: auto; /* Scroll if content exceeds height */
 }
 .diary-entry .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
+    background: #e60023;
+    padding: 15px;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
 }
 .diary-entry .header span {
-    font-family: 'Brush Script MT', cursive; /* Mimics cursive from image */
-    color: #000;
-    font-size: 18px;
+    font-family: 'Brush Script MT', cursive;
+    color: #fff;
+    font-size: 24px;
 }
 .diary-entry .header input[type="date"] {
     border: none;
-    border-bottom: 1px solid #000;
+    border-bottom: 2px solid #fff;
     background: none;
-    font-size: 14px;
+    font-size: 16px;
+    color: #fff;
 }
 .diary-entry p {
-    color: #666;
-    font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.8;
+    color: #333;
+    font-size: 16px;
+    flex-grow: 1; /* Allow content to expand within height */
+    margin-bottom: 20px;
+    background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAYSURBVBhXY2RgYPgPxYAAbYgIwIABWAAAAAElFTkSuQmCC') repeat-y; /* Lined background */
+    padding-left: 20px; /* Offset for lines */
+}
+.editing .notes {
+    display: none;
+}
+.editing .add-note {
+    display: block;
 }
 
 /* Mobile Responsiveness */
@@ -374,5 +399,19 @@ body.sidebar-open .container {
         width: 50px;
         height: 50px;
         font-size: 20px;
+    }
+    .top-bar {
+        padding: 10px 15px;
+    }
+    .nav-menu {
+        display: none; /* Hide menu on mobile, use toggle later if needed */
+    }
+    .nav-brand {
+        font-size: 20px;
+    }
+    .diary-entry {
+        width: 100%; /* Full width on mobile */
+        height: auto; /* Adjust height for content */
+        min-height: 400px; /* Ensure minimum square-like size */
     }
 }
