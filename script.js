@@ -53,7 +53,7 @@ document.querySelectorAll('.nav-option').forEach(option => {
     });
 });
 
-// Event delegation (updated for minimize button)
+// Event delegation (updated for navbar visibility in pop-up)
 document.addEventListener('click', (e) => {
     const sectionDiv = e.target.closest('.section');
     const navSection = e.target.closest('.nav-section');
@@ -116,12 +116,15 @@ document.addEventListener('click', (e) => {
         const index = entryDiv.querySelector('button').dataset.index;
         const item = (currentTab === 'notes' ? notesSections : diarySections)[sectionName][index];
         openEditablePopup(item, sectionName, index);
-    } else if (e.target.classList.contains('minimize-btn')) { // Updated from close-btn to minimize-btn
+        document.body.classList.add('popup-active'); // Hide navbar when pop-up is active
+    } else if (e.target.classList.contains('minimize-btn')) {
         // Close pop-up (discard changes if not updated)
         closePopup();
+        document.body.classList.remove('popup-active'); // Show navbar when pop-up closes
     } else if (e.target.classList.contains('cancel-btn')) {
         // Cancel editing in pop-up
         closePopup();
+        document.body.classList.remove('popup-active'); // Show navbar when pop-up closes
     } else if (e.target.classList.contains('update-btn')) {
         // Update content in pop-up
         const sectionName = e.target.dataset.section;
@@ -134,6 +137,7 @@ document.addEventListener('click', (e) => {
             sections[sectionName][index] = { title, content, date };
             saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
             closePopup();
+            document.body.classList.remove('popup-active'); // Show navbar when pop-up closes
             displaySections();
         }
     }
@@ -148,7 +152,7 @@ function openEditablePopup(item, sectionName, index) {
             <div class="header">
                 <span>${item.title || (currentTab === 'notes' ? 'Note' : 'Dear diary...')}</span>
                 ${currentTab === 'diary' ? `<input type="date" value="${item.date || ''}">` : ''}
-                <button class="minimize-btn">-</button> <!-- Updated from close-btn to minimize-btn -->
+                
                 <button class="cancel-btn">❌</button>
             </div>
             <div class="content">

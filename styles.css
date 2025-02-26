@@ -34,7 +34,7 @@ body {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 1200; /* Below top bar but above content */
+    z-index: 1900; /* Below top bar but above content */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -606,7 +606,7 @@ body.sidebar-open .container {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 1200;
+    z-index: 2000;
     display: flex;
     justify-content: center;
     align-items: center;
