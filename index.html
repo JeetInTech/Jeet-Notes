@@ -5,22 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JEET Notes & Diary</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
     <div class="top-bar">
         <div class="nav-brand">JEET</div>
         <div class="nav-menu">
-            <a href="#notes" class="nav-option active">Notes</a>
-            <a href="#diary" class="nav-option">Diary</a>
+            <a href="#notes" class="nav-option active" data-tab="notes">Notes</a>
+            <a href="#diary" class="nav-option" data-tab="diary">Diary</a>
         </div>
         <div class="search-container">
             <input type="text" id="search" placeholder="Search notes or diary...">
         </div>
     </div>
     <div class="layout">
-        <nav class="sidebar">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-search">
+                <input type="text" id="section-search" placeholder="Search sections...">
+            </div>
             <div class="nav-sections" id="nav-sections">
-                <!-- Dynamic sections for Notes here -->
+                <!-- Dynamic sections here -->
             </div>
             <div class="nav-add">
                 <input type="text" id="new-section" placeholder="Add a section">
@@ -28,10 +32,12 @@
             </div>
         </nav>
         <div class="container" id="sections">
-            <!-- Notes and Diary content will be dynamically added here -->
+            <!-- Dynamic content here -->
         </div>
     </div>
+    <button class="toggle-btn" id="toggle-btn">
+        <i class="fas fa-arrow-right"></i>
+    </button>
     <script src="script.js"></script>
-    
 </body>
 </html>

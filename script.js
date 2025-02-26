@@ -1,68 +1,118 @@
-// Load data from localStorage
-let sections = loadData();
+// Data storage
+let notesSections = loadData('notesData') || {};
+let diarySections = loadData('diaryData') || {};
+let currentTab = 'notes';
+
+// Initial render
 displayNavbar();
 displaySections();
 
-// Add section button event
+// Toggle sidebar
+document.getElementById('toggle-btn').addEventListener('click', () => {
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('toggle-btn');
+    const body = document.body;
+    sidebar.classList.toggle('open');
+    toggleBtn.classList.toggle('open');
+    body.classList.toggle('sidebar-open'); // Toggle class to shift content
+});
+
+// Section search
+document.getElementById('section-search').addEventListener('input', (e) => {
+    const searchTerm = e.target.value.trim().toLowerCase();
+    filterSections(searchTerm, currentTab);
+});
+
+// Add section
 document.getElementById('add-section-btn').addEventListener('click', () => {
-    let sectionName = document.getElementById('new-section').value.trim();
-    if (sectionName && !sections[sectionName]) {
-        addSection(sectionName);
-        document.getElementById('new-section').value = '';
+    const sectionName = document.getElementById('new-section').value.trim();
+    if (sectionName) {
+        const sections = currentTab === 'notes' ? notesSections : diarySections;
+        if (!sections[sectionName]) {
+            sections[sectionName] = [];
+            saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
+            document.getElementById('new-section').value = '';
+            displayNavbar();
+            displaySections();
+        }
     }
 });
 
-// Event delegation for adding notes, deleting notes, and deleting sections
+// Tab switching
+document.querySelectorAll('.nav-option').forEach(option => {
+    option.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.querySelector('.nav-option.active').classList.remove('active');
+        option.classList.add('active');
+        currentTab = option.getAttribute('data-tab');
+        displayNavbar();
+        displaySections();
+    });
+});
+
+// Event delegation
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('add-note-btn')) {
-        let sectionDiv = e.target.closest('.section');
-        let sectionName = sectionDiv.querySelector('h2').textContent;
-        let titleInput = sectionDiv.querySelector('.note-title');
-        let contentInput = sectionDiv.querySelector('.note-content');
-        let title = titleInput.value.trim();
-        let content = contentInput.value.trim();
+        const sectionDiv = e.target.closest('.section');
+        const sectionName = sectionDiv.querySelector('h2').textContent;
+        const titleInput = sectionDiv.querySelector('.note-title');
+        const contentInput = sectionDiv.querySelector('.note-content');
+        const dateInput = sectionDiv.querySelector('input[type="date"]');
+        const title = titleInput.value.trim();
+        const content = contentInput.value.trim();
+        const date = dateInput ? dateInput.value : '';
         if (title && content) {
-            addNote(sectionName, title, content);
+            const sections = currentTab === 'notes' ? notesSections : diarySections;
+            sections[sectionName].push({ title, content, date });
+            saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
             titleInput.value = '';
             contentInput.value = '';
+            if (dateInput) dateInput.value = '';
+            displaySections();
         }
     } else if (e.target.classList.contains('delete-btn')) {
-        let sectionDiv = e.target.closest('.section');
-        let sectionName = sectionDiv.querySelector('h2').textContent;
-        let noteDiv = e.target.closest('.note');
-        let noteIndex = Array.from(sectionDiv.querySelectorAll('.note')).indexOf(noteDiv);
-        deleteNote(sectionName, noteIndex);
+        const sectionDiv = e.target.closest('.section');
+        const sectionName = sectionDiv.querySelector('h2').textContent;
+        const index = e.target.dataset.index;
+        const sections = currentTab === 'notes' ? notesSections : diarySections;
+        sections[sectionName].splice(index, 1);
+        saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
+        displaySections();
     } else if (e.target.classList.contains('delete-section-btn')) {
-        let sectionName = e.target.closest('.nav-section').dataset.section;
-        deleteSection(sectionName);
+        const sectionName = e.target.closest('.nav-section').dataset.section;
+        const sections = currentTab === 'notes' ? notesSections : diarySections;
+        delete sections[sectionName];
+        saveData(currentTab === 'notes' ? 'notesData' : 'diaryData', sections);
+        displayNavbar();
+        displaySections();
     } else if (e.target.classList.contains('nav-section')) {
-        let sectionName = e.target.dataset.section;
+        const sectionName = e.target.dataset.section;
         scrollToSection(sectionName);
     }
 });
 
-// Search functionality
+// Main content search
 document.getElementById('search').addEventListener('input', (e) => {
-    filterNotes(e.target.value.trim());
+    const searchTerm = e.target.value.trim().toLowerCase();
+    filterContent(searchTerm, currentTab);
 });
 
-// Load data from localStorage
-function loadData() {
-    let data = localStorage.getItem('notesData');
+// Utility functions
+function loadData(key) {
+    const data = localStorage.getItem(key);
     return data ? JSON.parse(data) : {};
 }
 
-// Save data to localStorage
-function saveData() {
-    localStorage.setItem('notesData', JSON.stringify(sections));
+function saveData(key, data) {
+    localStorage.setItem(key, JSON.stringify(data));
 }
 
-// Display navbar sections
 function displayNavbar() {
-    let navSections = document.getElementById('nav-sections');
+    const navSections = document.getElementById('nav-sections');
     navSections.innerHTML = '';
-    for (let sectionName in sections) {
-        let navItem = document.createElement('div');
+    const sections = currentTab === 'notes' ? notesSections : diarySections;
+    for (const sectionName in sections) {
+        const navItem = document.createElement('div');
         navItem.className = 'nav-section';
         navItem.dataset.section = sectionName;
         navItem.innerHTML = `
@@ -71,85 +121,62 @@ function displayNavbar() {
         `;
         navSections.appendChild(navItem);
     }
+    filterSections(document.getElementById('section-search').value.trim(), currentTab);
 }
 
-// Display all sections and notes
+function filterSections(searchTerm, tab) {
+    const sections = document.querySelectorAll('.nav-section');
+    sections.forEach(section => {
+        const sectionName = section.querySelector('span').textContent.toLowerCase();
+        section.style.display = sectionName.includes(searchTerm) ? 'flex' : 'none';
+    });
+}
+
 function displaySections() {
-    let container = document.getElementById('sections');
+    const container = document.getElementById('sections');
     container.innerHTML = '';
-    for (let sectionName in sections) {
-        let sectionDiv = document.createElement('div');
+    const sectionsData = currentTab === 'notes' ? notesSections : diarySections;
+    for (const sectionName in sectionsData) {
+        const sectionDiv = document.createElement('div');
         sectionDiv.className = 'section';
         sectionDiv.id = `section-${sectionName.toLowerCase().replace(/\s+/g, '-')}`;
-        let notesHtml = sections[sectionName].map((note, index) => `
-            <div class="note">
-                <h3>${note.title}</h3>
-                <p>${note.content}</p>
+        const itemsHtml = sectionsData[sectionName].map((item, index) => `
+            <div class="${currentTab === 'notes' ? 'note' : 'diary-entry'}">
+                ${currentTab === 'diary' ? `
+                    <div class="header">
+                        <span>Dear diary...</span>
+                        <input type="date" value="${item.date || ''}" disabled>
+                    </div>
+                ` : ''}
+                <h3>${item.title}</h3>
+                <p>${item.content}</p>
                 <button class="delete-btn" data-index="${index}">X</button>
             </div>
         `).join('');
         sectionDiv.innerHTML = `
             <h2>${sectionName}</h2>
-            <div class="notes">${notesHtml}</div>
+            <div class="notes">${itemsHtml}</div>
             <div class="add-note">
-                <input type="text" class="note-title" placeholder="Note title">
-                <textarea class="note-content" placeholder="Note content"></textarea>
-                <button class="add-note-btn">Add Note</button>
+                <input type="text" class="note-title" placeholder="${currentTab === 'notes' ? 'Note title' : 'Dear Diary...'}">
+                ${currentTab === 'diary' ? '<input type="date" class="note-date">' : ''}
+                <textarea class="note-content" placeholder="${currentTab === 'notes' ? 'Write your note here...' : 'Write your entry here...'}"></textarea>
+                <button class="add-note-btn">Add ${currentTab === 'notes' ? 'Note' : 'Entry'}</button>
             </div>
         `;
         container.appendChild(sectionDiv);
     }
 }
 
-// Add a new section
-function addSection(sectionName) {
-    sections[sectionName] = [];
-    saveData();
-    displayNavbar();
-    displaySections();
-}
-
-// Add a new note
-function addNote(sectionName, title, content) {
-    sections[sectionName].push({ title, content });
-    saveData();
-    displaySections();
-}
-
-// Delete a note
-function deleteNote(sectionName, index) {
-    sections[sectionName].splice(index, 1);
-    saveData();
-    displaySections();
-}
-
-// Delete a section
-function deleteSection(sectionName) {
-    delete sections[sectionName];
-    saveData();
-    displayNavbar();
-    displaySections();
-}
-
-// Scroll to a section
 function scrollToSection(sectionName) {
-    let section = document.querySelector(`#section-${sectionName.toLowerCase().replace(/\s+/g, '-')}`);
-    if (section) {
-        section.scrollIntoView({ behavior: 'smooth' });
-    }
+    const section = document.querySelector(`#section-${sectionName.toLowerCase().replace(/\s+/g, '-')}`);
+    if (section) section.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Filter notes based on search term
-function filterNotes(searchTerm) {
-    let allNotes = document.querySelectorAll('.note');
-    allNotes.forEach(note => {
-        let title = note.querySelector('h3').textContent.toLowerCase();
-        let content = note.querySelector('p').textContent.toLowerCase();
-        let searchLower = searchTerm.toLowerCase();
-        if (title.includes(searchLower) || content.includes(searchLower)) {
-            note.classList.remove('hidden');
-        } else {
-            note.classList.add('hidden');
-        }
+function filterContent(searchTerm, tab) {
+    const items = document.querySelectorAll(`.${tab === 'notes' ? 'note' : 'diary-entry'}`);
+    items.forEach(item => {
+        const title = item.querySelector('h3').textContent.toLowerCase();
+        const content = item.querySelector('p').textContent.toLowerCase();
+        item.classList.toggle('hidden', !(title.includes(searchTerm) || content.includes(searchTerm)));
     });
 }

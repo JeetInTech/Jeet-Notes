@@ -8,6 +8,7 @@ body {
     font-family: 'Arial', sans-serif;
     background: #f5f5f5;
     min-height: 100vh;
+    transition: margin-left 0.3s ease; /* Smooth transition for content shift */
 }
 
 /* Top Bar with Search and Navbar */
@@ -66,20 +67,40 @@ body {
 /* Layout */
 .layout {
     display: flex;
-    margin-top: 70px; /* Space for top bar */
+    margin-top: 70px;
 }
 
-/* Sidebar (Left Navbar for Notes) */
+/* Sidebar (Drawer-Style) */
 .sidebar {
+    position: fixed;
+    top: 70px;
+    left: -250px; /* Initially hidden */
     width: 250px;
     height: calc(100vh - 70px);
     background: #fff;
     padding: 20px;
     box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-    position: fixed;
-    top: 70px;
-    left: 0;
+    transition: left 0.3s ease;
+    z-index: 900;
     overflow-y: auto;
+}
+.sidebar.open {
+    left: 0; /* Slides in when open */
+}
+.sidebar-search {
+    margin-bottom: 20px;
+}
+.sidebar-search input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #f9f9f9;
+    transition: border-color 0.3s;
+}
+.sidebar-search input:focus {
+    border-color: #e60023;
+    outline: none;
 }
 .nav-sections {
     display: flex;
@@ -147,14 +168,51 @@ body {
     background: #b3001b;
 }
 
-/* Container (Masonry Layout for Notes) */
+/* Toggle Button */
+.toggle-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background: #e60023;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: transform 0.3s;
+    z-index: 1100;
+}
+.toggle-btn:hover {
+    transform: scale(1.1);
+}
+.toggle-btn i {
+    transition: transform 0.3s;
+}
+.toggle-btn.open i {
+    transform: rotate(180deg);
+}
+
+/* Container (Masonry Layout) */
 .container {
-    margin-left: 270px; /* Space for sidebar */
+    margin-left: 0; /* Default state when sidebar is closed */
     max-width: 1000px;
     padding: 20px;
     columns: 3;
     column-gap: 20px;
+    width: 100%;
+    transition: margin-left 0.3s ease; /* Smooth transition for rearrangement */
 }
+body.sidebar-open .container {
+    margin-left: 270px; /* Shift right when sidebar is open */
+}
+
+/* Section and Note Styling */
 .section {
     break-inside: avoid;
     margin-bottom: 20px;
@@ -175,8 +233,6 @@ body {
     font-size: 18px;
     text-align: center;
 }
-
-/* Notes Styling */
 .notes {
     padding: 15px;
 }
@@ -233,7 +289,7 @@ body {
     background: #b3001b;
 }
 
-/* Add Note Form */
+/* Add Note/Diary Form */
 .add-note {
     padding: 15px;
     background: #f9f9f9;
@@ -264,44 +320,59 @@ body {
     background: #b3001b;
 }
 
-/* Diary Section (Placeholder for dynamic content) */
-.diary-section {
-    display: none; /* Hidden by default, shown via JS */
-}
+/* Diary-Specific Styling */
 .diary-entry {
     background: #fff;
     padding: 15px;
-    margin-bottom: 20px;
-    border-radius: 16px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    animation: slideIn 0.5s ease-out;
-}
-.diary-entry h3 {
-    color: #e60023;
     margin-bottom: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    position: relative;
+}
+.diary-entry .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.diary-entry .header span {
+    font-family: 'Brush Script MT', cursive; /* Mimics cursive from image */
+    color: #000;
+    font-size: 18px;
+}
+.diary-entry .header input[type="date"] {
+    border: none;
+    border-bottom: 1px solid #000;
+    background: none;
+    font-size: 14px;
 }
 .diary-entry p {
     color: #666;
+    font-size: 14px;
     line-height: 1.5;
 }
-.delete-diary-btn {
-    background: #e60023;
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-.diary-entry:hover .delete-diary-btn {
-    opacity: 1;
-}
-.delete-diary-btn:hover {
-    background: #b3001b;
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        left: -100%;
+    }
+    .sidebar.open {
+        left: 0;
+    }
+    body.sidebar-open .container {
+        margin-left: 0; /* No shift on mobile, sidebar overlays */
+    }
+    .container {
+        columns: 1; /* Stack items vertically */
+        padding: 10px;
+    }
+    .toggle-btn {
+        bottom: 15px;
+        left: 15px;
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
 }
