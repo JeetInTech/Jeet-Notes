@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JEET Notes & Diary</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="top-bar">
+        <div class="nav-brand">JEET</div>
+        <div class="nav-menu">
+            <a href="#notes" class="nav-option active">Notes</a>
+            <a href="#diary" class="nav-option">Diary</a>
+        </div>
+        <div class="search-container">
+            <input type="text" id="search" placeholder="Search notes or diary...">
+        </div>
+    </div>
+    <div class="layout">
+        <nav class="sidebar">
+            <div class="nav-sections" id="nav-sections">
+                <!-- Dynamic sections for Notes here -->
+            </div>
+            <div class="nav-add">
+                <input type="text" id="new-section" placeholder="Add a section">
+                <button id="add-section-btn">Add</button>
+            </div>
+        </nav>
+        <div class="container" id="sections">
+            <!-- Notes and Diary content will be dynamically added here -->
+        </div>
+    </div>
+    <script src="script.js"></script>
+    
+</body>
+</html>
