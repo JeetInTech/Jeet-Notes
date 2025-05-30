@@ -8,36 +8,168 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
+    <!-- Loading Spinner -->
+    <div class="loading-overlay">
+        <div class="spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading your notes...</p>
+        </div>
+    </div>
+
+    <!-- Top Header Bar -->
     <div class="top-bar">
-        <div class="nav-brand">JEET</div>
+        <div class="nav-brand">
+            <i class="fas fa-book"></i>
+            JEET
+        </div>
         <div class="nav-menu">
-            <a href="#notes" class="nav-option active" data-tab="notes">Notes</a>
-            <a href="#diary" class="nav-option" data-tab="diary">Diary</a>
+            <a href="#notes" class="nav-option active" data-tab="notes">
+                <i class="fas fa-sticky-note"></i>
+                Notes
+            </a>
+            <a href="#diary" class="nav-option" data-tab="diary">
+                <i class="fas fa-journal-whills"></i>
+                Diary
+            </a>
         </div>
         <div class="search-container">
+            <i class="fas fa-search search-icon"></i>
             <input type="text" id="search" placeholder="Search notes or diary...">
+            <div class="search-results-indicator" style="display: none;"></div>
+        </div>
+        <div class="sync-indicator">
+            <i class="fas fa-cloud" title="Sync status"></i>
+            <span class="sync-text">Offline</span>
         </div>
     </div>
+
+    <!-- Main Layout -->
     <div class="layout">
+        <!-- Sidebar Navigation -->
         <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3>Sections</h3>
+                <button class="mobile-menu-toggle" id="mobile-menu-toggle">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
             <div class="sidebar-search">
+                <i class="fas fa-search"></i>
                 <input type="text" id="section-search" placeholder="Search sections...">
             </div>
+            
             <div class="nav-sections" id="nav-sections">
-                <!-- Dynamic sections here -->
+                <!-- Dynamic sections populated by JavaScript -->
             </div>
+            
             <div class="nav-add">
-                <input type="text" id="new-section" placeholder="Add a section">
-                <button id="add-section-btn">Add</button>
+                <input type="text" id="new-section" placeholder="Add a new section" maxlength="50">
+                <button id="add-section-btn" title="Add Section">
+                    <i class="fas fa-plus"></i>
+                    Add
+                </button>
+            </div>
+
+            <!-- Keyboard Shortcuts Help -->
+            <div class="shortcuts-help">
+                <h4>Shortcuts</h4>
+                <div class="shortcut-item">
+                    <kbd>Ctrl</kbd> + <kbd>N</kbd> <span>New note</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>Ctrl</kbd> + <kbd>S</kbd> <span>Sync</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>Esc</kbd> <span>Cancel/Close</span>
+                </div>
             </div>
         </nav>
-        <div class="container" id="sections">
-            <!-- Dynamic content here -->
-        </div>
+
+        <!-- Main Content Area -->
+        <main class="container" id="sections">
+            <!-- Dynamic content populated by JavaScript -->
+            <div class="welcome-message" style="display: none;">
+                <div class="welcome-content">
+                    <i class="fas fa-book-open"></i>
+                    <h2>Welcome to JEET Notes & Diary</h2>
+                    <p>Start by creating your first section to organize your notes and diary entries.</p>
+                    <button onclick="document.getElementById('new-section').focus()">
+                        Create First Section
+                    </button>
+                </div>
+            </div>
+        </main>
     </div>
-    <button class="toggle-btn" id="toggle-btn">
-        <i class="fas fa-arrow-right"></i>
+
+    <!-- Sidebar Toggle Button -->
+    <button class="toggle-btn" id="toggle-btn" title="Toggle Sidebar">
+        <i class="fas fa-bars"></i>
     </button>
+
+    <!-- Floating Action Button for Mobile -->
+    <button class="fab" id="fab" title="Quick Add" style="display: none;">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- Status Messages -->
+    <div class="sync-status"></div>
+
+    <!-- Service Worker Registration -->
+    <script>
+        // Register service worker for offline functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+
+    <!-- Main Application Script -->
     <script src="script.js"></script>
+
+    <!-- Additional Scripts for Enhanced Features -->
+    <script>
+        // Dark mode toggle
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+        }
+
+        // Load dark mode preference
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.body.classList.add('dark-mode');
+        }
+
+        // Handle install prompt for PWA
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install button
+            const installBtn = document.createElement('button');
+            installBtn.textContent = 'Install App';
+            installBtn.className = 'install-btn';
+            installBtn.onclick = () => {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                    installBtn.remove();
+                });
+            };
+            
+            document.querySelector('.top-bar').appendChild(installBtn);
+        });
+    </script>
 </body>
 </html>
