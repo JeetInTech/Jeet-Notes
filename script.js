@@ -12,6 +12,9 @@ class NotesApp {
     this.lastSyncTime = null;
     this.syncInterval = null;
     this.cloudStorageKey = "notes-app-cloud-sync";
+    this.db = null;
+    this.DB_NAME = "JeetNotesDB";
+    this.DB_VERSION = 1;
 
     // Initialize app
     this.init();
@@ -19,6 +22,12 @@ class NotesApp {
 
   async init() {
     this.showLoadingSpinner();
+
+    // Initialize IndexedDB
+    await this.initIndexedDB();
+
+    // Request persistent storage
+    await this.requestPersistentStorage();
 
     // Load data from multiple sources
     await this.loadAllData();
@@ -57,11 +66,68 @@ class NotesApp {
     }
   }
 
+  async initIndexedDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+
+      request.onerror = () => {
+        console.warn("IndexedDB error:", request.error);
+        resolve(); // Continue with localStorage fallback
+      };
+
+      request.onsuccess = () => {
+        this.db = request.result;
+        console.log("IndexedDB initialized successfully");
+        resolve();
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+
+        // Create object stores
+        if (!db.objectStoreNames.contains("notes")) {
+          db.createObjectStore("notes", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("diary")) {
+          db.createObjectStore("diary", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("settings")) {
+          db.createObjectStore("settings", { keyPath: "key" });
+        }
+      };
+    });
+  }
+
+  async requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+      const isPersisted = await navigator.storage.persist();
+      if (isPersisted) {
+        console.log("Storage will not be cleared except by explicit user action");
+        this.showSyncStatus("Data protected from automatic deletion ✓", "success");
+      } else {
+        console.log("Storage may be cleared by the UA under storage pressure.");
+      }
+    }
+  }
+
   async loadAllData() {
     try {
-      // Load from localStorage first
-      this.notesSections = this.loadData("notesData") || {};
-      this.diarySections = this.loadData("diaryData") || {};
+      // Try loading from IndexedDB first
+      if (this.db) {
+        const notesData = await this.loadFromIndexedDB("notes");
+        const diaryData = await this.loadFromIndexedDB("diary");
+        
+        if (notesData) this.notesSections = notesData;
+        if (diaryData) this.diarySections = diaryData;
+      }
+
+      // Fallback to localStorage if IndexedDB is empty
+      if (Object.keys(this.notesSections).length === 0) {
+        this.notesSections = this.loadData("notesData") || {};
+      }
+      if (Object.keys(this.diarySections).length === 0) {
+        this.diarySections = this.loadData("diaryData") || {};
+      }
 
       // Try to sync with cloud storage
       await this.syncFromCloud();
@@ -69,6 +135,47 @@ class NotesApp {
       console.warn("Data loading error:", error);
       this.showSyncStatus("Error loading data", "error");
     }
+  }
+
+  async loadFromIndexedDB(storeName) {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        resolve(null);
+        return;
+      }
+
+      const transaction = this.db.transaction([storeName], "readonly");
+      const objectStore = transaction.objectStore(storeName);
+      const request = objectStore.get("data");
+
+      request.onsuccess = () => {
+        resolve(request.result ? request.result.value : null);
+      };
+
+      request.onerror = () => {
+        console.warn("Error loading from IndexedDB:", request.error);
+        resolve(null);
+      };
+    });
+  }
+
+  async saveToIndexedDB(storeName, data) {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        resolve();
+        return;
+      }
+
+      const transaction = this.db.transaction([storeName], "readwrite");
+      const objectStore = transaction.objectStore(storeName);
+      const request = objectStore.put({ id: "data", value: data });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => {
+        console.warn("Error saving to IndexedDB:", request.error);
+        resolve();
+      };
+    });
   }
 
   setupEventListeners() {
@@ -137,6 +244,14 @@ class NotesApp {
     // Before unload - save data
     window.addEventListener("beforeunload", () => {
       this.saveAllData();
+    });
+
+    // Export data shortcut
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "e") {
+        e.preventDefault();
+        this.exportData();
+      }
     });
 
     // Handle mobile touch events
@@ -326,11 +441,14 @@ class NotesApp {
       this.openEditablePopup(entryDiv);
     } else if (
       e.target.classList.contains("cancel-btn") ||
+      e.target.classList.contains("popup-cancel") ||
+      e.target.classList.contains("popup-close") ||
+      e.target.closest(".popup-close") ||
       e.target.classList.contains("popup-overlay")
     ) {
       this.closePopup();
-    } else if (e.target.classList.contains("update-btn")) {
-      this.handlePopupUpdate(e.target);
+    } else if (e.target.classList.contains("update-btn") || e.target.classList.contains("popup-update")) {
+      this.handlePopupUpdate(e.target.closest(".popup-update") || e.target);
     }
   }
 
@@ -339,6 +457,8 @@ class NotesApp {
     const titleInput = sectionDiv.querySelector(".note-title");
     const contentInput = sectionDiv.querySelector(".note-content");
     const dateInput = sectionDiv.querySelector(".note-date");
+    const moodInput = sectionDiv.querySelector(".mood-select");
+    const tagsInput = sectionDiv.querySelector(".tags-input");
 
     const title =
       titleInput.value.trim() ||
@@ -347,28 +467,32 @@ class NotesApp {
     const date = dateInput
       ? dateInput.value
       : new Date().toISOString().split("T")[0];
+    const mood = moodInput ? moodInput.value : "";
+    const tags = tagsInput ? tagsInput.value.split(",").map(t => t.trim()).filter(t => t) : [];
 
     if (content) {
       const sections =
         this.currentTab === "notes" ? this.notesSections : this.diarySections;
 
+      const entry = {
+        title,
+        content,
+        date,
+        lastModified: Date.now(),
+      };
+
+      if (this.currentTab === "diary") {
+        entry.mood = mood;
+        entry.tags = tags;
+      }
+
       if (this.editingIndex !== null) {
-        sections[sectionName][this.editingIndex] = {
-          title,
-          content,
-          date,
-          lastModified: Date.now(),
-        };
+        sections[sectionName][this.editingIndex] = entry;
         this.editingIndex = null;
         this.showSyncStatus("Entry updated successfully!", "success");
       } else {
-        sections[sectionName].push({
-          title,
-          content,
-          date,
-          created: Date.now(),
-          lastModified: Date.now(),
-        });
+        entry.created = Date.now();
+        sections[sectionName].push(entry);
         this.showSyncStatus("Entry added successfully!", "success");
       }
 
@@ -398,12 +522,16 @@ class NotesApp {
     const titleInput = sectionDiv.querySelector(".note-title");
     const contentInput = sectionDiv.querySelector(".note-content");
     const dateInput = sectionDiv.querySelector(".note-date");
+    const moodInput = sectionDiv.querySelector(".mood-select");
+    const tagsInput = sectionDiv.querySelector(".tags-input");
 
     titleInput.value =
       item.title ||
       (this.currentTab === "notes" ? "Note title" : "Dear Diary...");
     contentInput.value = item.content;
     if (dateInput) dateInput.value = item.date || "";
+    if (moodInput) moodInput.value = item.mood || "";
+    if (tagsInput) tagsInput.value = item.tags ? item.tags.join(", ") : "";
 
     this.editingIndex = index;
     sectionDiv.classList.add("editing");
@@ -466,38 +594,88 @@ class NotesApp {
 
     const overlay = document.createElement("div");
     overlay.className = "popup-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    
+    const moodEmojis = {
+      "amazing": "😄",
+      "happy": "😊",
+      "neutral": "😐",
+      "sad": "😢",
+      "angry": "😠",
+      "anxious": "😰",
+      "excited": "🤩",
+      "grateful": "🙏"
+    };
+
     overlay.innerHTML = `
             <div class="popup-content ${
               this.currentTab === "diary" ? "diary-popup" : ""
             }" data-section="${sectionName}" data-index="${index}">
-                <div class="header">
-                    <span>${
-                      item.title ||
-                      (this.currentTab === "notes" ? "Note" : "Dear diary...")
-                    }</span>
-                    <div>
-                        <button class="cancel-btn" title="Close">❌</button>
+                <div class="popup-header">
+                    <div class="popup-title">
+                        <i class="fas fa-${this.currentTab === "diary" ? "journal-whills" : "sticky-note"}"></i>
+                        <span>${
+                          item.title ||
+                          (this.currentTab === "notes" ? "Note" : "Dear diary...")
+                        }</span>
                     </div>
+                    <button class="popup-close" title="Close (Esc)" aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="content">
-                    <input type="text" value="${
-                      item.title ||
-                      (this.currentTab === "notes"
-                        ? "Note title"
-                        : "Dear Diary...")
-                    }" placeholder="Title">
+                <div class="popup-body">
+                    <div class="form-group">
+                        <label for="popup-title"><i class="fas fa-heading"></i> Title</label>
+                        <input type="text" id="popup-title" class="popup-input" value="${
+                          item.title ||
+                          (this.currentTab === "notes"
+                            ? "Note title"
+                            : "Dear Diary...")
+                        }" placeholder="Title">
+                    </div>
                     ${
                       this.currentTab === "diary"
-                        ? `<input type="date" value="${
-                            item.date || ""
-                          }" placeholder="Date">`
+                        ? `
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="popup-date"><i class="fas fa-calendar"></i> Date</label>
+                                <input type="date" id="popup-date" class="popup-input" value="${
+                                  item.date || ""
+                                }">
+                            </div>
+                            <div class="form-group">
+                                <label for="popup-mood"><i class="fas fa-smile"></i> Mood</label>
+                                <select id="popup-mood" class="popup-input mood-select">
+                                    <option value="">Select mood...</option>
+                                    ${Object.entries(moodEmojis).map(([mood, emoji]) => 
+                                      `<option value="${mood}" ${item.mood === mood ? 'selected' : ''}>${emoji} ${mood.charAt(0).toUpperCase() + mood.slice(1)}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="popup-tags"><i class="fas fa-tags"></i> Tags</label>
+                            <input type="text" id="popup-tags" class="popup-input" value="${item.tags ? item.tags.join(", ") : ""}" placeholder="family, work, travel (comma separated)">
+                        </div>
+                        `
                         : ""
                     }
-                    <textarea placeholder="Content">${item.content}</textarea>
-                    <div class="popup-actions">
-                        <button class="update-btn" data-section="${sectionName}" data-index="${index}">💾 Update</button>
-                        <button class="cancel-btn">❌ Cancel</button>
+                    <div class="form-group">
+                        <label for="popup-content"><i class="fas fa-align-left"></i> Content</label>
+                        <textarea id="popup-content" class="popup-textarea" placeholder="Write your ${this.currentTab === "diary" ? "entry" : "note"} here..." rows="12">${item.content}</textarea>
+                        <div class="char-count">${item.content.length} characters</div>
                     </div>
+                    ${item.created ? `<div class="entry-meta"><i class="fas fa-clock"></i> Created: ${new Date(item.created).toLocaleString()}</div>` : ""}
+                    ${item.lastModified ? `<div class="entry-meta"><i class="fas fa-edit"></i> Modified: ${new Date(item.lastModified).toLocaleString()}</div>` : ""}
+                </div>
+                <div class="popup-footer">
+                    <button class="btn-secondary popup-cancel" tabindex="0">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <button class="btn-primary popup-update" data-section="${sectionName}" data-index="${index}" tabindex="0">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
                 </div>
             </div>
         `;
@@ -505,20 +683,74 @@ class NotesApp {
     document.body.appendChild(overlay);
     document.body.classList.add("popup-active");
 
-    setTimeout(() => overlay.classList.add("active"), 10);
+    // Prevent body scroll
+    document.body.style.overflow = "hidden";
+
+    // Setup character counter
+    const textarea = overlay.querySelector("#popup-content");
+    const charCount = overlay.querySelector(".char-count");
+    if (textarea && charCount) {
+      textarea.addEventListener("input", () => {
+        charCount.textContent = `${textarea.value.length} characters`;
+      });
+    }
+
+    // Setup keyboard navigation
+    this.setupPopupKeyboardNav(overlay);
+
+    // Animate in
+    requestAnimationFrame(() => {
+      overlay.classList.add("active");
+    });
+
     this.popupActive = overlay;
 
-    // Focus on textarea
+    // Focus on title input
     setTimeout(() => {
-      const textarea = overlay.querySelector("textarea");
-      if (textarea) {
-        textarea.focus();
-        textarea.setSelectionRange(
-          textarea.value.length,
-          textarea.value.length
-        );
+      const titleInput = overlay.querySelector("#popup-title");
+      if (titleInput) {
+        titleInput.focus();
+        titleInput.select();
       }
     }, 100);
+  }
+
+  setupPopupKeyboardNav(overlay) {
+    const focusableElements = overlay.querySelectorAll(
+      'input, textarea, select, button, [tabindex="0"]'
+    );
+    const firstFocusable = focusableElements[0];
+    const lastFocusable = focusableElements[focusableElements.length - 1];
+
+    overlay.addEventListener("keydown", (e) => {
+      // Escape key closes popup
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closePopup();
+      }
+
+      // Tab key navigation
+      if (e.key === "Tab") {
+        if (e.shiftKey) {
+          if (document.activeElement === firstFocusable) {
+            e.preventDefault();
+            lastFocusable.focus();
+          }
+        } else {
+          if (document.activeElement === lastFocusable) {
+            e.preventDefault();
+            firstFocusable.focus();
+          }
+        }
+      }
+
+      // Ctrl/Cmd + Enter to save
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        const updateBtn = overlay.querySelector(".popup-update");
+        if (updateBtn) updateBtn.click();
+      }
+    });
   }
 
   handlePopupUpdate(updateBtn) {
@@ -527,16 +759,22 @@ class NotesApp {
     const index = updateBtn.dataset.index;
 
     const title =
-      popupContent.querySelector('input[type="text"]').value.trim() ||
+      popupContent.querySelector('#popup-title').value.trim() ||
       (this.currentTab === "notes" ? "Note title" : "Dear Diary...");
-    const content = popupContent.querySelector("textarea").value.trim();
-    const dateInput = popupContent.querySelector('input[type="date"]');
+    const content = popupContent.querySelector("#popup-content").value.trim();
+    const dateInput = popupContent.querySelector('#popup-date');
+    const moodInput = popupContent.querySelector('#popup-mood');
+    const tagsInput = popupContent.querySelector('#popup-tags');
+    
     const date = dateInput ? dateInput.value : "";
+    const mood = moodInput ? moodInput.value : "";
+    const tags = tagsInput ? tagsInput.value.split(",").map(t => t.trim()).filter(t => t) : [];
 
     if (content) {
       const sections =
         this.currentTab === "notes" ? this.notesSections : this.diarySections;
-      sections[sectionName][index] = {
+      
+      const updatedEntry = {
         ...sections[sectionName][index],
         title,
         content,
@@ -544,10 +782,19 @@ class NotesApp {
         lastModified: Date.now(),
       };
 
+      if (this.currentTab === "diary") {
+        updatedEntry.mood = mood;
+        updatedEntry.tags = tags;
+      }
+
+      sections[sectionName][index] = updatedEntry;
+
       this.saveAllData();
       this.closePopup();
       this.displaySections();
       this.showSyncStatus("Entry updated successfully!", "success");
+    } else {
+      this.showSyncStatus("Content cannot be empty!", "error");
     }
   }
 
@@ -555,6 +802,7 @@ class NotesApp {
     if (this.popupActive) {
       this.popupActive.classList.remove("active");
       document.body.classList.remove("popup-active");
+      document.body.style.overflow = "";
 
       setTimeout(() => {
         this.popupActive.remove();
@@ -763,7 +1011,14 @@ class NotesApp {
     });
   }
 
-  saveAllData() {
+  async saveAllData() {
+    // Save to IndexedDB (primary storage)
+    if (this.db) {
+      await this.saveToIndexedDB("notes", this.notesSections);
+      await this.saveToIndexedDB("diary", this.diarySections);
+    }
+
+    // Also save to localStorage as backup
     this.saveData("notesData", this.notesSections);
     this.saveData("diaryData", this.diarySections);
 
@@ -854,34 +1109,51 @@ class NotesApp {
       const itemsHtml = sectionsData[sectionName]
         .sort((a, b) => (b.created || 0) - (a.created || 0)) // Sort by creation date
         .map(
-          (item, index) => `
+          (item, index) => {
+            const moodEmojis = {
+              "amazing": "😄",
+              "happy": "😊",
+              "neutral": "😐",
+              "sad": "😢",
+              "angry": "😠",
+              "anxious": "😰",
+              "excited": "🤩",
+              "grateful": "🙏"
+            };
+            
+            return `
                     <div class="${
                       this.currentTab === "notes" ? "note" : "diary-entry"
                     }" data-index="${index}">
                         ${
                           this.currentTab === "diary"
                             ? `
-                            <div class="header">
-                                <span>Dear diary...</span>
+                            <div class="diary-header">
+                                <div class="diary-title-row">
+                                    <span class="diary-greeting">Dear diary...</span>
+                                    ${item.mood ? `<span class="mood-badge" title="${item.mood}">${moodEmojis[item.mood] || ""}</span>` : ""}
+                                </div>
                                 <input type="date" value="${
                                   item.date || ""
                                 }" disabled>
                             </div>
+                            ${item.tags && item.tags.length > 0 ? `<div class="tags-container">${item.tags.map(tag => `<span class="tag">#${tag}</span>`).join("")}</div>` : ""}
                         `
                             : `<h3>${item.title || "Untitled Note"}</h3>`
                         }
                         <p>${this.truncateText(item.content, 150)}</p>
                         ${
                           item.lastModified
-                            ? `<small>Last modified: ${new Date(
+                            ? `<small><i class="fas fa-clock"></i> ${new Date(
                                 item.lastModified
                               ).toLocaleDateString()}</small>`
                             : ""
                         }
-                        <button class="edit-btn" data-index="${index}" title="Edit">✏️</button>
-                        <button class="delete-btn" data-index="${index}" title="Delete">🗑️</button>
+                        <button class="edit-btn" data-index="${index}" title="Edit"><i class="fas fa-edit"></i></button>
+                        <button class="delete-btn" data-index="${index}" title="Delete"><i class="fas fa-trash"></i></button>
                     </div>
-                `
+                `;
+          }
         )
         .join("");
 
@@ -1008,6 +1280,63 @@ class NotesApp {
     } else {
       indicator.style.display = "none";
     }
+  }
+
+  // Export data to JSON file
+  exportData() {
+    const data = {
+      version: "1.0",
+      exportDate: new Date().toISOString(),
+      notesData: this.notesSections,
+      diaryData: this.diarySections,
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `jeet-notes-backup-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    this.showSyncStatus("Data exported successfully!", "success");
+  }
+
+  // Import data from JSON file
+  importData(file) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+
+        if (data.notesData || data.diaryData) {
+          const confirmImport = confirm(
+            "This will replace your current data. Do you want to continue?"
+          );
+
+          if (confirmImport) {
+            this.notesSections = data.notesData || {};
+            this.diarySections = data.diaryData || {};
+
+            await this.saveAllData();
+            this.displayNavbar();
+            this.displaySections();
+
+            this.showSyncStatus("Data imported successfully!", "success");
+          }
+        } else {
+          throw new Error("Invalid data format");
+        }
+      } catch (error) {
+        console.error("Import error:", error);
+        this.showSyncStatus("Error importing data. Invalid file format.", "error");
+      }
+    };
+    reader.readAsText(file);
   }
 }
 

@@ -4,7 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JEET Notes & Diary</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Theme Colors -->
+    <meta name="theme-color" content="#e60023">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="JEET Notes">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icon-192.png">
+    
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="diary-enhancements.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
@@ -36,6 +53,15 @@
             
             <input type="text" id="search" placeholder="Search notes or diary...">
             <div class="search-results-indicator" style="display: none;"></div>
+        </div>
+        <div class="data-controls">
+            <button class="export-btn" id="export-btn" title="Export Data (Ctrl+E)">
+                <i class="fas fa-download"></i>
+            </button>
+            <label for="import-file" class="import-btn" title="Import Data">
+                <i class="fas fa-upload"></i>
+            </label>
+            <input type="file" id="import-file" accept=".json" style="display: none;">
         </div>
         <div class="sync-indicator">
             <i class="fas fa-cloud" title="Sync status"></i>
@@ -133,6 +159,27 @@
 
     <!-- Main Application Script -->
     <script src="script.js"></script>
+
+    <!-- Export/Import Event Listeners -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Export button
+            document.getElementById('export-btn')?.addEventListener('click', () => {
+                if (window.notesApp) {
+                    window.notesApp.exportData();
+                }
+            });
+
+            // Import file input
+            document.getElementById('import-file')?.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file && window.notesApp) {
+                    window.notesApp.importData(file);
+                }
+                e.target.value = ''; // Reset input
+            });
+        });
+    </script>
 
     <!-- Additional Scripts for Enhanced Features -->
     <script>
